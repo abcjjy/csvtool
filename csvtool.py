@@ -13,6 +13,8 @@ def main():
     ap.add_argument('-s', '--select', help='Python expression producing new row based on the input row')
     ap.add_argument('-a', '--aggregate', nargs=2, help='The 1st arg is expression for build the group key, the 2nd arg is python expression')
     ap.add_argument('-o', '--output', default=None, help='Output file name')
+    ap.add_argument('-S', '--sort', help='Sort output expression')
+    ap.add_argument('-t', '--outheader', help="Output headers")
     ap.add_argument('input', help='input csv file or "-" for std input')
 
     args = ap.parse_args()
@@ -31,11 +33,16 @@ def main():
 
     rows = process(args, rows)
 
+    if args.sort:
+        fv = lambda row: eval(args.sort)
+        rows = sorted(rows, lambda x, y: cmp(fv(x), fv(y)))
+
     outs = open(args.output) if args.output else sys.stdout
     irows = iter(rows)
     try:
         row = next(irows)
-        outcsv = csv.DictWriter(outs, row.keys()) if type(row)==dict else csv.writer(outs)
+        hdr = row.keys() if not args.outheader else args.outheader.split()
+        outcsv = csv.DictWriter(outs, hdr) if type(row)==dict else csv.writer(outs)
         if type(row) == dict:
             outcsv.writeheader()
         while True:
@@ -46,8 +53,14 @@ def main():
     outs.close();
     instream.close();
 
-def pick(d, ks):
-    return {k:d[k] for k in ks}
+def pick(d, ks, m):
+    if m:
+        return {k:m(d[k]) for k in ks}
+    else:
+        return {k:d[k] for k in ks}
+
+def median(l, key):
+    return sorted(l, lambda x, y: cmp(x[key], y[key]))[len(l)/2][key]
 
 def process(args, rows):
     if args.aggregate:
